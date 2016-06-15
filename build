@@ -1,0 +1,3 @@
+#!/bin/sh
+pasm -b test.p
+gcc -Wall -O2 crc32.c test.c -o test -lpthread -lprussdrv
