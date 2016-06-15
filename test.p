@@ -52,7 +52,8 @@
 // values for IOCFG0
 #define IOCFG0_RX 0x00
 #define IOCFG0_CCA 0x09
-#define IOCFG0_TX 0x02	
+#define IOCFG0_TX 0x02
+#define IOCFG0_PACKETEND 0x06	
 	
 .macro delay40us
    MOV r0, 4000
@@ -291,18 +292,16 @@ MOREREMAINS:
 	longdelay
 	JMP RXLOOP
 WAITENDRX:
-	// check if remaining bytes are all in RXBUFFER
-	delay1ms
 	CLR CS
-	readReg r4.b0, CC1101_RXBYTES, CC1101_STATUS_REGISTER
+	writeReg CC1101_IOCFG0, IOCFG0_PACKETEND
 	delay
 	SET CS
 	longdelay
+	WBC GD0
 	// r7.w0 is bytes we need to read
 	SUB r7.w0, r6.w0, r6.w2
 	// take into account 2 status bytes at the end of the packet
 	ADD r7.w0, r7.w0, 2
-	QBNE WAITENDRX, r4.b0, r7.b0
 	// read remaining bytes
 	CLR CS
 	MOV r4.b0, CC1101_RXFIFO
@@ -313,8 +312,9 @@ WAITENDRX:
 	delay
 	SET CS
 	longdelay
-	// set FIFOTHR and packet mode (infinite) to its normal state
+	// set FIFOTHR, packet mode (infinite) and GD0 to its normal state
 	CLR CS
+	writeReg CC1101_IOCFG0, IOCFG0_RX
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
 	delay
@@ -410,20 +410,13 @@ TXLOOPEND:
 	CLR CS
 	// set fixed packet length
 	writeReg CC1101_PKTCTRL0, PKTCTRL0 & ~0x03
-	delay
-	SET CS
-	// wait for TX FIFO to go below threshold
-	WBC GD0
-	// wait for MARCSTATE==RX
-WAITENDTX:
-	delay100us
-	CLR CS
-	readReg r4.b0, CC1101_MARCSTATE, CC1101_STATUS_REGISTER
+	// set GD0 to deassert on packet end
+	writeReg CC1101_IOCFG0, IOCFG0_PACKETEND
 	delay
 	SET CS
 	longdelay
-	AND r4.b0, r4.b0, 0x1f
-	QBNE WAITENDTX, r4.b0, 0x0d
+	// wait for end of packet
+	WBC GD0
 	CLR CS
 	// set infinite packet length
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
@@ -433,6 +426,7 @@ WAITENDTX:
 	writeReg CC1101_IOCFG0, IOCFG0_RX
 	delay
 	SET CS
+	longdelay
 IGNOREPACKETTX:
 	// clear packet-in-use indicator
 	MOV r0.w0, 0
