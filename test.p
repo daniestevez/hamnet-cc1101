@@ -21,6 +21,9 @@
 #define RX0 0x1000
 #define RX1 0x1800
 
+#define SHORTPACKET 0x20
+	
+	
 #define TXTHRESHOLD 5
 #define TXFIFOTHR 0x4e
 #define RXHEADFIFOTHR 0x40
@@ -215,9 +218,11 @@ DORX:
 	MOV r6.w2, 2
 	// pktlen is r6.w0
 	// written is r6.w2
-	// enforce pktlen within bounds
-	MOV r0.w0, MAXLEN
-	MIN r6.w0, r6.w0, r0.w0
+	// "fail" if pktlen is not within bounds
+	QBGE LENGHTOK, r6.w0, MAXLEN
+	MOV r6.w0, SHORTPACKET
+	MOV r11.w0, 0
+LENGTHOK:
 	CLR CS
 	writeReg CC1101_PKTLEN, r6.b0
 	writeReg CC1101_FIFOTHR, RXFIFOTHR
