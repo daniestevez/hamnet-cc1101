@@ -17,7 +17,7 @@
 
    /* This overlay uses the following resources */
    exclusive-use =
-          "P9.27", "P9.28", "P9.29", "P9.30", "P9.31", "P8.42", "P8.44", "P8.46", "P8.43", "P8.45",  "pru0", "pru1";
+          "P9.27", "P9.28", "P9.29", "P9.30", "P9.31", "pru0";
 
    fragment@0 {
       target = <&am33xx_pinmux>;
@@ -30,12 +30,6 @@
                0x194 0x0d  // MOSI P9_29 pr1_pru0_pru_r30_1, MODE5 | OUTPUT | DIS  00001101=0x0d
                0x198 0x0d  // CLK  P9_30 pr1_pru0_pru_r30_2, MODE5 | OUTPUT | DIS  00001101=0x0d
                0x190 0x26  // GD0  P9_31 pr1_pru0_pru_r31_0, MODE6 | INPUT  | PULL-DOWN 00100101=0x26
-	       0x0b4 0x0d  // CS   P8_42 pr1_pru1_pru_r30_5, MODE5 | OUTPUT | DIS  00001101=0x0d
-               0x0ac 0x36  // MISO P8_44 pr1_pru1_pru_r31_3, MODE6 | INPUT  | PULL-UP  00110110=0x36
-               0x0a4 0x0d  // MOSI P8_46 pr1_pru1_pru_r30_1, MODE5 | OUTPUT | DIS  00001101=0x0d
-               0x0a8 0x0d  // CLK  P8_43 pr1_pru1_pru_r30_2, MODE5 | OUTPUT | DIS  00001101=0x0d
-               0x0a0 0x26  // GD0  P8_45 pr1_pru1_pru_r31_0, MODE6 | INPUT  | PULL-DOWN 00100101=0x26
-
             >;
          };
       };
