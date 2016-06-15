@@ -38,6 +38,11 @@ void *receive_thread (void *arg) {
   while (1) {
     prussdrv_pru_wait_event(PRU_EVTOUT_1);
 
+    // for some reason we have to use PRU1_ARM_INTERRUPT
+    // instead of PRU0_ARM_INTERRUPT
+    // see https://groups.google.com/forum/#!topic/beagleboard/e-Nqdngv9mo
+    prussdrv_pru_clear_event(PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
+
     for (i = 0; i < 2; i++) {
       if ((len = ntohs(*rx_len[i]))) {
 	memcpy(buffer, (void *) rx_data[i], len - 2); // 2 for length
@@ -50,11 +55,6 @@ void *receive_thread (void *arg) {
 	}
       }
     }
-
-    // for some reason we have to use PRU1_ARM_INTERRUPT
-    // instead of PRU0_ARM_INTERRUPT
-    // see https://groups.google.com/forum/#!topic/beagleboard/e-Nqdngv9mo
-    prussdrv_pru_clear_event(PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
   }
 }
 
