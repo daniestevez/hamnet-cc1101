@@ -3,35 +3,57 @@
 
 #include "cc1101.hp"
 
+// number of loops in SPI delay loop
 #define SPIDELAY 5
 
 #define PRU0_R31_VEC_VALID 32    // allows notification of program completion
 #define PRU_EVTOUT_0    3        // the event number that is sent back
 #define PRU_EVTOUT_1	4	
 
+// CC1101 pins
 #define SCK r30.t2
 #define MOSI r30.t1
 #define MISO r31.t3
 #define CS r30.t5
 #define GD0 r31.t0
-	
+
+// maximum packet length
 #define MAXLEN 0x07fe
+
+// addresses of buffers
 #define TX0 0x0000
 #define TX1 0x0800
 #define RX0 0x1000
 #define RX1 0x1800
 
+// when receiving a packet length which is
+// longer than the maximum, we pretend that
+// the length of the packet is this one:
 #define SHORTPACKET 0x20
-	
-	
+
+// number of elements in TX buffer
+// when threshold is reached
 #define TXTHRESHOLD 5
 #define TXFIFOTHR 0x4e
+
+// FIFOTHR to use when RXing the head of the packet
 #define RXHEADFIFOTHR 0x40
+// number of elements to receive as the head of the packet
+#define RXHEAD 4
+
+// number of elements in RX buffer
+// when threshold is reached
 #define RXTHRESHOLD 60
-#define RXFIFOTHR 0x4e	
-#define RXHEAD 4	
+#define RXFIFOTHR 0x4e
+
+// custom PKTCTRL0
 #define PKTCTRL0 0x46
 
+// values for IOCFG0
+#define IOCFG0_RX 0x00
+#define IOCFG0_CCA 0x09
+#define IOCFG0_TX 0x02	
+	
 .macro delay40us
    MOV r0, 4000
 LOOP:
@@ -53,6 +75,7 @@ LOOP:
    QBNE LOOP, r0, 0
 .endm     
 
+// delays for SPI
 .macro delay
    MOV r0, SPIDELAY
 LOOP:
@@ -188,18 +211,23 @@ START:
 	// go into RX mode
 	CLR CS
 	// set RX FIFO threshold on GD0
-	writeReg CC1101_IOCFG0, 0x00
+	writeReg CC1101_IOCFG0, IOCFG0_RX
 	cmdStrobe CC1101_SRX
 	delay
 	SET CS
+	longdelay
 
+/*************************************************************
+	RX CODE
+*************************************************************/
 DORX:
 	// check if we are receiving something
 	QBBC ENDRX, GD0
 	// clear pktlen
 	MOV r0.w0, 0
 	SBBO r0.w0, r8, 0, 2
-	// read pktlen into r6.w0
+	// read pktlen into r6.w0 (first we read into *r8 + 2)
+	// this could be improved to read directly into the register
 	CLR CS
 	MOV r4.b0, CC1101_RXFIFO
 	MOV r4.b1, 2
@@ -218,11 +246,13 @@ DORX:
 	MOV r6.w2, 2
 	// pktlen is r6.w0
 	// written is r6.w2
+	// r11.w0 holds the pktlen as RX'd (big endian)
 	// "fail" if pktlen is not within bounds
 	QBGE LENGHTOK, r6.w0, MAXLEN
 	MOV r6.w0, SHORTPACKET
 	MOV r11.w0, 0
 LENGTHOK:
+	// write PKTLEN register and set RXFIFOTHR to normal RX value
 	CLR CS
 	writeReg CC1101_PKTLEN, r6.b0
 	writeReg CC1101_FIFOTHR, RXFIFOTHR
@@ -233,6 +263,7 @@ RXLOOP:
 	// check if less than 256 bytes remain
 	SUB r0.w0, r6.w0, r6.w2
 	QBNE MOREREMAINS, r0.b1, 0
+	// less than 256 bytes remain
 	// set fixed packet length
 	CLR CS
 	writeReg CC1101_PKTCTRL0, PKTCTRL0 & ~0x03
@@ -240,10 +271,13 @@ RXLOOP:
 	SET CS
 	longdelay
 MOREREMAINS:
+	// r7.w0 is bytes we still need to read
 	SUB r7.w0, r6.w0, r6.w2
 	// if less than a full RXFIFOTHR buffer remains, exit this loop
 	QBGE WAITENDRX, r7.w0, RXTHRESHOLD
+	// wait for RXFIFO above threshold
 	WBS GD0
+	// read RXTHRESHOLD bytes
 	CLR CS
 	MOV r4.b0, CC1101_RXFIFO
 	MOV r4.b1, RXTHRESHOLD
@@ -263,6 +297,7 @@ WAITENDRX:
 	delay
 	SET CS
 	longdelay
+	// r7.w0 is bytes we need to read
 	SUB r7.w0, r6.w0, r6.w2
 	// take into account 2 status bytes at the end of the packet
 	ADD r7.w0, r7.w0, 2
@@ -277,11 +312,10 @@ WAITENDRX:
 	delay
 	SET CS
 	longdelay
-	// set GD0 and PKTLEN to its normal state
+	// set FIFOTHR and packet mode (infinite) to its normal state
 	CLR CS
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
-	writeReg CC1101_IOCFG0, 0x00
 	delay
 	SET CS
 	longdelay
@@ -294,7 +328,10 @@ WAITENDRX:
 	MOV r8, r9
 	MOV r9, r0
 ENDRX:
-   
+
+/****************************************************************
+	TX CODE
+*****************************************************************/
 DOTX:   
 	// check if something to send
 	MOV r10, TX0
@@ -302,8 +339,9 @@ DOTX:
 	QBNE PROCESSTX, r6.w0, 0
 	MOV r10, TX1
 	LBBO r6.w0, r10, 0, 2
-	QBEQ NEXT, r6.w0, 0
+	QBEQ ENDTX, r6.w0, 0
 PROCESSTX:
+	// r10 is address of buffer with data to TX
 	/*CLR CS
 	cmdStrobe CC1101_SFSTXON
 	delay
@@ -317,7 +355,7 @@ PROCESSTX:
 	// check packet length
 	MOV r0.w0, MAXLEN
 	QBLT IGNOREPACKETTX, r6.w0, r0.w0
-	// send
+	// write PKTLEN register
 	CLR CS
 	writeReg CC1101_PKTLEN, r6.b0
 	MIN r6.w2, r6.w0, CC1101_BUFFER_LEN
@@ -332,7 +370,7 @@ PROCESSTX:
 	longdelay
 	// set GD0 to output CCA
 	CLR CS
-	writeReg CC1101_IOCFG0, 0x09
+	writeReg CC1101_IOCFG0, IOCFG0_CCA
 	delay
 	SET CS
 	longdelay
@@ -341,15 +379,19 @@ PROCESSTX:
 	// set GD0 to output TX FIFO threshold
 	CLR CS
 	writeReg CC1101_FIFOTHR, TXFIFOTHR
-	writeReg CC1101_IOCFG0, 0x02
+	writeReg CC1101_IOCFG0, IOCFG0_TX
 	// go into TX
 	cmdStrobe CC1101_STX
 	delay
 	SET CS
 	longdelay
+	// TODO: check that TX mode has been entered
 TXLOOP:
+	// check if we have written all
 	QBEQ TXLOOPEND, r6.w0, r6.w2
+	// r7.w0 is bytes that remain to be written
 	SUB r7.w0, r6.w0, r6.w2
+	// wait for threshold below level
 	WBC GD0
 	CLR CS
 	// at most TXTHRESHOLD - 1 bytes are filled in TX FIFO
@@ -373,7 +415,7 @@ TXLOOPEND:
 	WBC GD0
 	// wait for MARCSTATE==RX
 WAITENDTX:
-	delay1ms
+	delay100us
 	CLR CS
 	readReg r4.b0, CC1101_MARCSTATE, CC1101_STATUS_REGISTER
 	delay
@@ -387,17 +429,15 @@ WAITENDTX:
 	// set FIFO threshold for TX
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR	
 	// set GD0 to output RX FIFO threshold
-	writeReg CC1101_IOCFG0, 0x00
+	writeReg CC1101_IOCFG0, IOCFG0_RX
 	delay
 	SET CS
 IGNOREPACKETTX:
 	// clear packet-in-use indicator
 	MOV r0.w0, 0
 	SBBO r0.w0, r10, 0, 2
-
-NEXT:
-   
-   JMP DORX
+ENDTX:
+	JMP DORX
    
    
    
