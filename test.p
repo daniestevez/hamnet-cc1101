@@ -248,7 +248,8 @@ DORX:
 	// written is r6.w2
 	// r11.w0 holds the pktlen as RX'd (big endian)
 	// "fail" if pktlen is not within bounds
-	QBGE LENGHTOK, r6.w0, MAXLEN
+	MOV r0.w0, MAXLEN
+	QBGE LENGTHOK, r6.w0, r0.w0
 	MOV r6.w0, SHORTPACKET
 	MOV r11.w0, 0
 LENGTHOK:
