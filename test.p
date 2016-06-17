@@ -46,14 +46,17 @@
 #define RXTHRESHOLD 60
 #define RXFIFOTHR 0x4e
 
+// number of elements in FIFO
+#define FIFOLEN 64	
+	
 // custom PKTCTRL0
-#define PKTCTRL0 0x46
+#define PKTCTRL0 0x42
 
 // values for IOCFG0
 #define IOCFG0_RX 0x00
 #define IOCFG0_CCA 0x09
 #define IOCFG0_TX 0x02
-#define IOCFG0_PACKETEND 0x06	
+#define IOCFG0_PACKET 0x06	
 	
 .macro delay40us
    MOV r0, 4000
@@ -182,6 +185,7 @@ START:
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
 	// custom PKTCTRL0
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
+	// custom PKTCTRL1
    
 	delay
 	SET CS
@@ -198,21 +202,21 @@ START:
 	SET CS
 	longdelay
 
-   /*  // calibrate PLL
-   CLR CS
+   // calibrate PLL
+   //CLR CS
    // set PLL lock status on GD0
-   writeReg CC1101_IOCFG0, 0x0A
-   cmdStrobe CC1101_SCAL
-   delay
-   SET CS
-   longdelay
+   //writeReg CC1101_IOCFG0, 0x0A
+   //cmdStrobe CC1101_SCAL
+   //delay
+   //SET CS
+   //longdelay
    // wait for PLL lock
-   WBS GD0*/
+   //WBS GD0
    
 	// go into RX mode
 	CLR CS
 	// set RX FIFO threshold on GD0
-	writeReg CC1101_IOCFG0, IOCFG0_RX
+	writeReg CC1101_IOCFG0, IOCFG0_PACKET
 	cmdStrobe CC1101_SRX
 	delay
 	SET CS
@@ -224,6 +228,15 @@ START:
 DORX:
 	// check if we are receiving something
 	QBBC ENDRX, GD0
+/*	// set RXFIFO to receive the head
+	CLR CS
+	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
+	writeReg CC1101_IOCFG0, IOCFG0_RX
+	SET CS
+	longdelay
+	// wait to receive the head
+	WBS GD0
+	*/
 	// clear pktlen
 	MOV r0.w0, 0
 	SBBO r0.w0, r8, 0, 2
@@ -267,6 +280,7 @@ RXLOOP:
 	QBNE MOREREMAINS, r0.b1, 0
 	// less than 256 bytes remain
 	// set fixed packet length
+	// TODO: do this only once
 	CLR CS
 	writeReg CC1101_PKTCTRL0, PKTCTRL0 & ~0x03
 	delay
@@ -275,14 +289,14 @@ RXLOOP:
 MOREREMAINS:
 	// r7.w0 is bytes we still need to read
 	SUB r7.w0, r6.w0, r6.w2
-	// if less than a full RXFIFOTHR buffer remains, exit this loop
-	QBGE WAITENDRX, r7.w0, RXTHRESHOLD
+	// if less than a full RXFIFO buffer remains, exit this loop
+	QBGE WAITENDRX, r7.w0, FIFOLEN-2 // -2 for 2 status bytes
 	// wait for RXFIFO above threshold
 	WBS GD0
-	// read RXTHRESHOLD bytes
+	// read RXTHRESHOLD-1 bytes (-1 for silicon errata)
 	CLR CS
 	MOV r4.b0, CC1101_RXFIFO
-	MOV r4.b1, RXTHRESHOLD
+	MOV r4.b1, RXTHRESHOLD-1
 	MOV r5, r8
 	ADD r5, r5, r6.w2
 	ADD r6.w2, r6.w2, r4.b1
@@ -292,8 +306,9 @@ MOREREMAINS:
 	longdelay
 	JMP RXLOOP
 WAITENDRX:
+	// wait for end of packet
 	CLR CS
-	writeReg CC1101_IOCFG0, IOCFG0_PACKETEND
+	writeReg CC1101_IOCFG0, IOCFG0_PACKET
 	delay
 	SET CS
 	longdelay
@@ -314,9 +329,9 @@ WAITENDRX:
 	longdelay
 	// set FIFOTHR, packet mode (infinite) and GD0 to its normal state
 	CLR CS
+	writeReg CC1101_PKTCTRL0, PKTCTRL0
 	writeReg CC1101_IOCFG0, IOCFG0_RX
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
-	writeReg CC1101_PKTCTRL0, PKTCTRL0
 	delay
 	SET CS
 	longdelay
@@ -343,11 +358,21 @@ DOTX:
 	QBEQ ENDTX, r6.w0, 0
 PROCESSTX:
 	// r10 is address of buffer with data to TX
-	/*CLR CS
+	CLR CS
 	cmdStrobe CC1101_SFSTXON
 	delay
 	SET CS
-	*/
+	longdelay
+	// check if FSTXON has been entered
+	// (it is not entered if CCA is false)
+	CLR CS
+	readReg r4.b0, CC1101_MARCSTATE, CC1101_STATUS_REGISTER
+	delay
+	SET CS
+	longdelay
+	AND r4.b0, r4.b0, 0x1f
+	// do not tx if radio still in RX
+	QBEQ ENDTX, r4.b0, 0x0d
 	// swap r6.w0 to little endian order
 	MOV r0.b0, r6.b1
 	MOV r6.b1, r6.b0
@@ -369,6 +394,7 @@ PROCESSTX:
 	delay
 	SET CS
 	longdelay
+	/*
 	// set GD0 to output CCA
 	CLR CS
 	writeReg CC1101_IOCFG0, IOCFG0_CCA
@@ -377,6 +403,7 @@ PROCESSTX:
 	longdelay
 	// wait for CCA
 	WBS GD0
+	*/
 	// set GD0 to output TX FIFO threshold
 	CLR CS
 	writeReg CC1101_FIFOTHR, TXFIFOTHR
@@ -410,19 +437,17 @@ TXLOOPEND:
 	CLR CS
 	// set fixed packet length
 	writeReg CC1101_PKTCTRL0, PKTCTRL0 & ~0x03
-	// set GD0 to deassert on packet end
-	writeReg CC1101_IOCFG0, IOCFG0_PACKETEND
+	// wait for end of packet
+	writeReg CC1101_IOCFG0, IOCFG0_PACKET
 	delay
 	SET CS
 	longdelay
-	// wait for end of packet
+	WBS GD0
 	WBC GD0
 	CLR CS
 	// set infinite packet length
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
-	// set FIFO threshold for TX
-	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR	
-	// set GD0 to output RX FIFO threshold
+	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
 	writeReg CC1101_IOCFG0, IOCFG0_RX
 	delay
 	SET CS
@@ -433,10 +458,6 @@ IGNOREPACKETTX:
 	SBBO r0.w0, r10, 0, 2
 ENDTX:
 	JMP DORX
-   
-   
-   
-   
 
 END:                             // notify the calling app that finished
    MOV R31.b0, PRU0_R31_VEC_VALID | PRU_EVTOUT_0
