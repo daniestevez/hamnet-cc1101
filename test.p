@@ -57,7 +57,11 @@
 #define IOCFG0_CCA 0x09
 #define IOCFG0_TX 0x02
 #define IOCFG0_PACKET 0x06	
-	
+
+// timer to avoid collisions
+// no packet can be TXed until the timer has counted to 0
+#define COLLISION_TIMER 50000
+
 .macro delay40us
    MOV r0, 4000
 LOOP:
@@ -131,6 +135,8 @@ LOOP:
 .endm
    
 START:
+	// r12 is collision timer
+	MOV r12, 0
 	// r8 is current RX buffer. r9 is standby RX buffer
 	MOV r8, RX0
 	MOV r9, RX1
@@ -343,12 +349,19 @@ WAITENDRX:
 	MOV r0, r8
 	MOV r8, r9
 	MOV r9, r0
+	// set collision timer
+	MOV r12, COLLISION_TIMER
 ENDRX:
 
 /****************************************************************
 	TX CODE
 *****************************************************************/
-DOTX:   
+DOTX:
+	// check collision timer
+	QBEQ CHECKTX, r12, 0
+	SUB r12, r12, 1
+	JMP ENDTX
+CHECKTX:	
 	// check if something to send
 	MOV r10, TX0
 	LBBO r6.w0, r10, 0, 2
@@ -372,7 +385,9 @@ PROCESSTX:
 	longdelay
 	AND r4.b0, r4.b0, 0x1f
 	// do not tx if radio still in RX
-	QBEQ ENDTX, r4.b0, 0x0d
+	QBNE GOTX, r4.b0, 0x0d
+	JMP ENDTX
+GOTX:
 	// swap r6.w0 to little endian order
 	MOV r0.b0, r6.b1
 	MOV r6.b1, r6.b0
@@ -394,16 +409,6 @@ PROCESSTX:
 	delay
 	SET CS
 	longdelay
-	/*
-	// set GD0 to output CCA
-	CLR CS
-	writeReg CC1101_IOCFG0, IOCFG0_CCA
-	delay
-	SET CS
-	longdelay
-	// wait for CCA
-	WBS GD0
-	*/
 	// set GD0 to output TX FIFO threshold
 	CLR CS
 	writeReg CC1101_FIFOTHR, TXFIFOTHR
@@ -452,6 +457,8 @@ TXLOOPEND:
 	delay
 	SET CS
 	longdelay
+	// set collision timer
+	//MOV r12, COLLISION_TIMER
 IGNOREPACKETTX:
 	// clear packet-in-use indicator
 	MOV r0.w0, 0

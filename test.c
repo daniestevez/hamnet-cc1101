@@ -30,10 +30,12 @@ volatile uint8_t *rx_data[2];
 int tap0_fd;
 
 void *receive_thread (void *arg) {
-  uint8_t buffer[1600];
-  uint16_t len;
+  uint8_t buffer[2][1600];
+  uint16_t len[2];
   int i;
   crc_t crc;
+
+  memset(len, 0, sizeof(len));
 
   while (1) {
     prussdrv_pru_wait_event(PRU_EVTOUT_1);
@@ -44,14 +46,19 @@ void *receive_thread (void *arg) {
     prussdrv_pru_clear_event(PRU_EVTOUT_1, PRU1_ARM_INTERRUPT);
 
     for (i = 0; i < 2; i++) {
-      if ((len = ntohs(*rx_len[i]))) {
-	memcpy(buffer, (void *) rx_data[i], len - 2); // 2 for length
+      if ((len[i] = ntohs(*rx_len[i]))) {
+	memcpy(buffer[i], (void *) rx_data[i], len[i] - 2); // 2 for length
 	*rx_len[i] = 0;
+      }
+    }
+
+    for (i = 0; i < 2; i++) {
+      if (len[i]) {
 	crc = crc_init();
-	crc = crc_update(crc, (void *) buffer, len - 2 - 4); // 2 for length, 4 for crc32
+	crc = crc_update(crc, (void *) buffer[i], len[i] - 2 - 4); // 2 for length, 4 for crc32
 	crc = crc_finalize(crc);
-	if (crc == ntohl(*(uint32_t *) (buffer + len - 2 - 4))) {
-	  write(tap0_fd, buffer, len - 2 - 4);
+	if (crc == ntohl(*(uint32_t *) (buffer[i] + len[i] - 2 - 4))) {
+	  write(tap0_fd, buffer[i], len[i] - 2 - 4);
 	}
       }
     }
