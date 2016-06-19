@@ -162,15 +162,14 @@ START:
 	// set default regs
 	CLR CS
 
-	// 100k GFSK 47.6kHz dev
-	writeReg CC1101_FSCTRL1, 0x0C
+	// 434.00MHz MSK 128kbps 232kHz RX bandwith
+	writeReg CC1101_FSCTRL1, 0x08
 	writeReg CC1101_FREQ2, 0x10
 	writeReg CC1101_FREQ1, 0xB1
 	writeReg CC1101_FREQ0, 0x3B
-	writeReg CC1101_MDMCFG4, 0x5B
-	writeReg CC1101_MDMCFG3, 0xF8
-	writeReg CC1101_MDMCFG2, 0xf3 // MSK
-	writeReg CC1101_DEVIATN, 0x07 
+	writeReg CC1101_MDMCFG4, 0x7C
+	writeReg CC1101_MDMCFG3, 0x43
+	writeReg CC1101_MDMCFG2, 0x73
 	writeReg CC1101_FOCCFG, 0x1D
 	writeReg CC1101_BSCFG, 0x1C
 	writeReg CC1101_AGCCTRL2, 0xC7
@@ -182,8 +181,10 @@ START:
 	writeReg CC1101_FSCAL2, 0x2A
 	writeReg CC1101_FSCAL1, 0x00
 	writeReg CC1101_FSCAL0, 0x1F
+	writeReg CC1101_TEST2, 0x81
+	writeReg CC1101_TEST1, 0x35
 	writeReg CC1101_TEST0, 0x09
-
+	
 	// custom MCSM
 	writeReg CC1101_MCSM1, 0x2f
 	writeReg CC1101_MCSM0, 0x18
