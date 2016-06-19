@@ -191,7 +191,8 @@ START:
 	writeReg CC1101_FIFOTHR, RXHEADFIFOTHR
 	// custom PKTCTRL0
 	writeReg CC1101_PKTCTRL0, PKTCTRL0
-	// custom PKTCTRL1
+	// custom IOCFG2 (PA_PD output)
+	writeReg CC1101_IOCFG2, 0x5b
    
 	delay
 	SET CS
