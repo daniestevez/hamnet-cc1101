@@ -352,7 +352,7 @@ WAITENDRX:
 	MOV r8, r9
 	MOV r9, r0
 	// set collision timer
-	//MOV r12, COLLISION_TIMER
+	MOV r12, COLLISION_TIMER
 ENDRX:
 
 /****************************************************************
@@ -460,7 +460,7 @@ TXLOOPEND:
 	SET CS
 	longdelay
 	// set collision timer
-	MOV r12, COLLISION_TIMER
+	//MOV r12, COLLISION_TIMER
 IGNOREPACKETTX:
 	// clear packet-in-use indicator
 	MOV r0.w0, 0
