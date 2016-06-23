@@ -1,4 +1,0 @@
-#!/bin/sh
-dtc -O dtb -o BB-HAMNET-CC1101-00A0.dtbo -b 0 -@ BB-HAMNET-CC1101-00A0.dts
-pasm -b test.p
-gcc -Wall -O2 crc32.c test.c -o test -lpthread -lprussdrv
