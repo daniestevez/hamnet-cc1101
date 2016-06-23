@@ -108,7 +108,7 @@ int main (void) {
   memset((void *) pru0_dataram, 0, 0x2000);
   
   // Load and execute the PRU program on the PRU
-  prussdrv_exec_program(PRU_NUM, "./test.bin");
+  prussdrv_exec_program(PRU_NUM, "./hamnet-cc1101.bin");
 
   if ((tap0_fd = open("/dev/net/tun", O_RDWR)) < 0) {
     perror("Unable to open /dev/net/tun");
