@@ -24,13 +24,15 @@
 #define RX0 0x1000
 #define RX1 0x1800
 
+#define BUFFER_LEN TX1
+
 volatile uint16_t *rx_len[2];
 volatile uint8_t *rx_data[2];
 
 int tap0_fd;
 
 void *receive_thread (void *arg) {
-  uint8_t buffer[2][1600];
+  uint8_t buffer[2][BUFFER_LEN];
   uint16_t len[2];
   int i;
   crc_t crc;
@@ -71,7 +73,7 @@ int main (void) {
   volatile uint8_t *tx_data[2];
 
   struct ifreq ifr;
-  char buffer[1600];
+  char buffer[BUFFER_LEN];
   int nread;
   crc_t crc;
   int i;
