@@ -19,7 +19,7 @@ INSTRUCTIONS
     
     GDO0 - P9_31
 
-  If your modules has a PA that is enabled with an active high signal, you can connect the GDO2
+  If your module has a PA that is enabled with an active high signal, you can connect the GDO2
   pin on the CC1101 to the PA enable pin.
 
 3. Run make
